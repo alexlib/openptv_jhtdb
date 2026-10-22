@@ -1,2 +1,5 @@
 givernylocal>=3.6.0
 numpy
+zarr
+marimo
+plotly
