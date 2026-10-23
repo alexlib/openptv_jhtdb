@@ -24,6 +24,8 @@ app = mo.App()
 ###############################################################################
 @app.cell
 def __():
+    import marimo as mo
+
     import numpy as np
     import plotly.graph_objects as go
     import plotly.express as px
@@ -31,7 +33,7 @@ def __():
     from gyverny.jhtdb import JHTDBClient
     from gyverny.lagrangian import LagrangianTracker
 
-    return go, np, px, JHTDBClient, LagrangianTracker
+    return mo, go, np, px, JHTDBClient, LagrangianTracker
 
 
 ###############################################################################
@@ -61,13 +63,13 @@ def __(mo):
     )
 
     start_time = mo.ui.number(
-        value=1, start=1, step=1, label="Start timepoint", integer=True
+        value=1, start=1, step=1, label="Start timepoint"
     )
     end_time = mo.ui.number(
-        value=4, start=1, step=1, label="End timepoint", integer=True
+        value=4, start=1, step=1, label="End timepoint"
     )
     dt = mo.ui.number(
-        value=1.0, start=0.1, step=0.1, label="Time step (dt)", integer=False
+        value=1.0, start=0.1, step=0.1, label="Time step (dt)"
     )
 
     spatial_method = mo.ui.dropdown(
@@ -77,7 +79,7 @@ def __(mo):
     )
 
     n_particles = mo.ui.number(
-        value=50, start=1, step=10, label="Number of particles", integer=True
+        value=50, start=1, step=10, label="Number of particles"
     )
 
     seed_mode = mo.ui.dropdown(
@@ -141,6 +143,7 @@ def __(mo):
 ###############################################################################
 @app.cell
 def __(
+    mo,
     LagrangianTracker,
     JHTDBClient,
     auth_token,
@@ -173,23 +176,26 @@ def __(
     else:
         # --- seed particle positions ----------------------------------------
         rng = np.random.default_rng(42)
-        if seed_mode == "random":
+        # UI widgets are passed by reference; read their current values.
+        n_particles_val = int(n_particles.value)
+        seed_mode_val = seed_mode.value
+        if seed_mode_val == "random":
             # isotropic8192 domain approx [0, 2*pi); keep particles well inside.
-            start_positions = rng.uniform(0.5, 6.0, size=(int(n_particles), 3))
-        elif seed_mode == "grid":
-            side = int(np.ceil(int(n_particles) ** (1 / 3)))
+            start_positions = rng.uniform(0.5, 6.0, size=(n_particles_val, 3))
+        elif seed_mode_val == "grid":
+            side = int(np.ceil(n_particles_val ** (1 / 3)))
             lin = np.linspace(0.5, 5.0, side)
             grid = np.stack(np.meshgrid(lin, lin, lin, indexing="ij"), -1)
-            start_positions = grid.reshape(-1, 3)[: int(n_particles)]
+            start_positions = grid.reshape(-1, 3)[:n_particles_val]
         else:
             # fixed manual seed
             start_positions = np.array(
                 [[0.5, 0.5, 0.5], [10.0, 10.0, 10.0], [50.0, 50.0, 50.0]],
                 dtype=float,
-            )[: int(n_particles)]
-            if len(start_positions) < int(n_particles):
+            )[:n_particles_val]
+            if len(start_positions) < n_particles_val:
                 pad = rng.uniform(
-                    0.5, 6.0, size=(int(n_particles) - len(start_positions), 3)
+                    0.5, 6.0, size=(n_particles_val - len(start_positions), 3)
                 )
                 start_positions = np.vstack([start_positions, pad])
 
@@ -219,17 +225,28 @@ def __(
 
 
 ###############################################################################
-# Cell 4 — interactive 3D viewer (Plotly)
+# Cell 4 — viewer widgets (slider + history toggle)
 ###############################################################################
 @app.cell
-def __(go, np, px, times, trajectory):
+def __(mo, times, trajectory):
     T, N, _ = trajectory.shape
 
-    # Time slider: which snapshot to show, plus "show full history" toggle.
+    # Time slider: which snapshot to show.
     time_slider = mo.ui.slider(
         start=0, stop=T - 1, value=T - 1, step=1, label="Snapshot index"
     )
+    # Show full trajectory history (faint lines) or just the current snapshot.
     show_history = mo.ui.checkbox(value=True, label="Show full trajectory history")
+
+    return T, N, time_slider, show_history
+
+
+###############################################################################
+# Cell 5 — interactive 3D viewer (Plotly)
+###############################################################################
+@app.cell
+def __(mo, go, np, px, times, trajectory, T, N, time_slider, show_history):
+    t_idx = int(time_slider.value)
 
     fig = go.Figure()
 
@@ -252,7 +269,6 @@ def __(go, np, px, times, trajectory):
             )
 
     # Current snapshot as markers.
-    t_idx = int(time_slider.value)
     fig.add_trace(
         go.Scatter3d(
             x=trajectory[t_idx, :, 0],
@@ -289,11 +305,11 @@ def __(go, np, px, times, trajectory):
     mo.md("### Interactive 3D viewer")
     fig
 
-    return fig, time_slider, show_history
+    return fig
 
 
 ###############################################################################
-# Cell 5 — summary table & export
+# Cell 6 — summary table & export
 ###############################################################################
 @app.cell
 def __(mo, np, times, trajectory, tracker):
@@ -335,9 +351,11 @@ def __(mo, np, times, trajectory, tracker):
 
 
 ###############################################################################
-# Cell 6 — layout assembly
+# Cell 7 — layout assembly
 ###############################################################################
 @app.cell
-def __(ui, fig):
+def __(mo, ui, fig):
+    mo.md("## Controls + Viewer")
     mo.hstack([ui, fig])
     return
+
