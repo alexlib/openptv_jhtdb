@@ -78,6 +78,17 @@ def __(mo):
         label="Spatial interpolation",
     )
 
+    scheme = mo.ui.dropdown(
+        options=["rk4", "euler"],
+        value="rk4",
+        label="Integration scheme",
+    )
+
+    adaptive = mo.ui.checkbox(value=False, label="Adaptive timestep (CFL)")
+    cfl = mo.ui.number(
+        value=0.5, start=0.05, step=0.05, label="CFL number"
+    )
+
     n_particles = mo.ui.number(
         value=50, start=1, step=10, label="Number of particles"
     )
@@ -132,6 +143,9 @@ def __(mo):
         save_to_zarr,
         seed_mode,
         spatial_method,
+        scheme,
+        adaptive,
+        cfl,
         start_time,
         ui,
         zarr_path,
@@ -156,6 +170,9 @@ def __(
     save_to_zarr,
     seed_mode,
     spatial_method,
+    scheme,
+    adaptive,
+    cfl,
     start_time,
     np,
     zarr_path,
@@ -211,6 +228,9 @@ def __(
             start_time=int(start_time.value),
             dt=float(dt.value),
             spatial_method=spatial_method.value,
+            scheme=scheme.value,
+            adaptive=bool(adaptive.value),
+            cfl=float(cfl.value),
         )
         tracker.run(end_time=float(end_time.value), verbose=False)
 
@@ -334,6 +354,7 @@ def __(mo, np, times, trajectory, tracker):
         f"""
         ### Summary
 
+        Scheme: **{tracker.scheme}** ({'adaptive CFL' if tracker.adaptive else 'fixed dt'} dt={tracker.dt_base})
         Snapshots: **{len(times)}** (t = {times[0]:.2f} → {times[-1]:.2f})
         Particles: **{trajectory.shape[1]}**
         Mean displacement: **{float(np.mean(displacement)):.3f}**
